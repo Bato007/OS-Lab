@@ -88,5 +88,16 @@ int main(int argc, char** argv) {
     sudoku_array[x][y] = opened_file[i] - '0';
   }
 
+  // Revision del sudoku
+  for (i = 0; i < 9; i++) {
+    int row = 3*(i/3);
+    int column = 3*(i%3);
+    int result = check_group(row, column);
+    if (result == -1) {
+      printf("numero invalido en la posicion (%d, %d)\n", row, column);
+    }
+  }
+
+  printf("Sudoku valido\n");
   return 0;
 }
