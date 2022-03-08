@@ -1,9 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 
 int sudoku_array[9][9];
@@ -98,6 +100,12 @@ int main(int argc, char** argv) {
     }
   }
 
-  printf("Sudoku valido\n");
+  if (fork() == 0) {
+    char parent_id[20];
+    sprintf(parent_id, "%d", (int)(getppid()));
+    execlp("ps", "ps", "-p", parent_id, "-lLf");
+  } else {
+    wait(NULL);
+  }
   return 0;
 }
