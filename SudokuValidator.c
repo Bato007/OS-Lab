@@ -6,7 +6,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/syscall.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 int sudoku_array[9][9];
 
@@ -30,7 +32,10 @@ int check_row(int row) {
   return 0;
 }
 
-int check_column(int column) {
+void* check_column(void *arg) {
+  int column;
+  column = (intptr_t) arg;
+
   if (column < 0 || 8 < column) { return -1; }
   int i, j;
   int checks[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -44,10 +49,10 @@ int check_column(int column) {
         break;
       }
       // No encntro el numero
-      if (j == 8) { return -1; }
+      if (j == 8) { pthread_exit(-1); }
     }
   }
-  return 0;
+  pthread_exit(0);
 }
 
 int check_group(int row, int column) {
@@ -76,6 +81,7 @@ int check_group(int row, int column) {
 int main(int argc, char** argv) {
   char* sudoku_path = argv[1];
   int i, readFile;
+  pthread_t thread;
 
   readFile = open(sudoku_path, O_RDONLY, 0666);\
   struct stat sb;
@@ -99,6 +105,13 @@ int main(int argc, char** argv) {
       printf("numero invalido en la posicion (%d, %d)\n", row, column);
     }
   }
+
+  // Se crea el hilo
+  for (i = 0; i < 9; i++) {
+    pthread_create(&thread, NULL, check_column, (void *)i);
+  }
+  
+  pthread_join(thread, NULL);
 
   if (fork() == 0) {
     char parent_id[20];
