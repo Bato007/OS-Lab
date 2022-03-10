@@ -11,6 +11,8 @@
 #include <pthread.h>
 
 int sudoku_array[9][9];
+int columns = 0;
+int rows = 0;
 
 int check_row(int row) {
   if (row < 0 || 8 < row) { return -1; }
@@ -32,10 +34,7 @@ int check_row(int row) {
   return 0;
 }
 
-void* check_column(void *arg) {
-  int column;
-  column = (intptr_t) arg;
-
+int check_column(int column) {
   if (column < 0 || 8 < column) { return -1; }
   int i, j;
   int checks[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -49,10 +48,10 @@ void* check_column(void *arg) {
         break;
       }
       // No encntro el numero
-      if (j == 8) { pthread_exit(-1); }
+      if (j == 8) { return -1; }
     }
   }
-  pthread_exit(0);
+  return 0;
 }
 
 int check_group(int row, int column) {
@@ -76,6 +75,20 @@ int check_group(int row, int column) {
     }
   }
   return 0;
+}
+
+void* check_all_columns(void *arg) {
+  printf("El thread que ejecuta el metodo para ejecutar el metodo de revision de columnas es: %d\n", (int)(syscall(SYS_gettid)));
+  int i, check;
+  for (i = 0; i < 8; i++) {
+    printf("En la revision de columna %d, el siguiente es un thread en ejecucion: %d\n", i, (int)(syscall(SYS_gettid)));
+    check = check_column(i);
+    if (check == -1) {
+      columns = -1;
+      break;
+    }
+  }
+  pthread_exit(0);
 }
 
 int main(int argc, char** argv) {
@@ -107,18 +120,42 @@ int main(int argc, char** argv) {
   }
 
   // Se crea el hilo
-  for (i = 0; i < 9; i++) {
-    pthread_create(&thread, NULL, check_column, (void *)i);
-  }
-  
+  pthread_create(&thread, NULL, check_all_columns, NULL);
   pthread_join(thread, NULL);
 
+  printf("El thread en el que se ejecuta main es: %d\n", (int)(syscall(SYS_gettid)));
   if (fork() == 0) {
     char parent_id[20];
     sprintf(parent_id, "%d", (int)(getppid()));
     execlp("ps", "ps", "-p", parent_id, "-lLf");
   } else {
     wait(NULL);
+    int check;
+    for (i = 0; i < 8; i++) { // Verifica las filas el padre
+      check = check_column(i);
+      if (check == -1) {
+        rows = -1;
+        break;
+      }
+    }
+
+    // Le indica al usuario cual fue el resultado del sudoku
+    if (rows == 0 && columns == 0){
+      printf("Sudoku resuelto!");
+    } else {
+      printf("Sudoku invalido");
+    }
+
+    if (fork() == 0) {
+      char parent_id[20];
+      sprintf(parent_id, "%d", (int)(getppid()));
+      execlp("ps", "ps", "-p", parent_id, "-lLf");
+    } else {
+      wait(NULL);
+    }
   }
-  return 0;
+
+  
+
+  pthread_exit(0);
 }
