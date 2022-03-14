@@ -9,6 +9,7 @@
 #include <sys/syscall.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <omp.h>
 
 int sudoku_array[9][9];
 int columns = 0;
@@ -19,8 +20,10 @@ int check_row(int row) {
   int i, j;
   int checks[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
+  #pragma omp parallel for
   for (i = 0; i < 9; i++) {
     // Verifica que este en el arreglo
+    #pragma omp parallel for
     for (j = 0; j < 9; j++) {
       // Encontro el numero
       if (sudoku_array[row][i] == checks[j]) {
@@ -36,11 +39,14 @@ int check_row(int row) {
 
 int check_column(int column) {
   if (column < 0 || 8 < column) { return -1; }
+  printf("En la revision de columna %d, el siguiente es un thread en ejecucion: %d\n", column, syscall(SYS_gettid));
   int i, j;
   int checks[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
+  #pragma omp parallel for
   for (i = 0; i < 9; i++) {
     // Verifica que este en el arreglo
+    #pragma omp parallel for
     for (j = 0; j < 9; j++) {
       // Encontro el numero
       if (sudoku_array[i][column] == checks[j]) {
@@ -60,10 +66,12 @@ int check_group(int row, int column) {
   int i, j;
   int checks[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
+  #pragma omp parallel for
   for (i = 0; i < 9; i++) {
     // Verifica que este en el arreglo
     int x = row + (i / 3);
     int y = column + (i % 3);
+    #pragma omp parallel for
     for (j = 0; j < 9; j++) {
       // Encontro el numero
       if (sudoku_array[x][y] == checks[j]) {
@@ -78,10 +86,10 @@ int check_group(int row, int column) {
 }
 
 void* check_all_columns(void *arg) {
-  printf("El thread que ejecuta el metodo para ejecutar el metodo de revision de columnas es: %d\n", (int)(syscall(SYS_gettid)));
+  printf("El hilo que revisa las columnas es: %d\n", syscall(SYS_gettid));
   int i, check;
+
   for (i = 0; i < 8; i++) {
-    printf("En la revision de columna %d, el siguiente es un thread en ejecucion: %d\n", i, (int)(syscall(SYS_gettid)));
     check = check_column(i);
     if (check == -1) {
       columns = -1;
@@ -109,28 +117,22 @@ int main(int argc, char** argv) {
     sudoku_array[x][y] = opened_file[i] - '0';
   }
 
-  // Revision del sudoku
-  for (i = 0; i < 9; i++) {
-    int row = 3*(i/3);
-    int column = 3*(i%3);
-    int result = check_group(row, column);
-    if (result == -1) {
-      printf("numero invalido en la posicion (%d, %d)\n", row, column);
-    }
-  }
-
-  // Se crea el hilo
-  pthread_create(&thread, NULL, check_all_columns, NULL);
-  pthread_join(thread, NULL);
-
-  printf("El thread en el que se ejecuta main es: %d\n", (int)(syscall(SYS_gettid)));
   if (fork() == 0) {
-    char parent_id[20];
+    char parent_id[10];
     sprintf(parent_id, "%d", (int)(getppid()));
     execlp("ps", "ps", "-p", parent_id, "-lLf");
   } else {
+  
+    // Se crea el hilo
+    pthread_create(&thread, NULL, check_all_columns, NULL);
+    pthread_join(thread, NULL);
+
+    printf("El thread en el que se ejecuta main es: %d\n", syscall(SYS_gettid));
+
     wait(NULL);
     int check;
+
+    #pragma omp parallel for
     for (i = 0; i < 8; i++) { // Verifica las filas el padre
       check = check_column(i);
       if (check == -1) {
@@ -139,15 +141,26 @@ int main(int argc, char** argv) {
       }
     }
 
+    // Revision del sudoku
+    #pragma omp parallel for
+    for (i = 0; i < 9; i++) {
+      int row = 3*(i/3);
+      int column = 3*(i%3);
+      int result = check_group(row, column);
+      if (result == -1) {
+        printf("numero invalido en la posicion (%d, %d)\n", row, column);
+      }
+    }
+
     // Le indica al usuario cual fue el resultado del sudoku
     if (rows == 0 && columns == 0){
-      printf("Sudoku resuelto!");
+      printf("Sudoku resuelto!\n");
     } else {
-      printf("Sudoku invalido");
+      printf("Sudoku invalido\n");
     }
 
     if (fork() == 0) {
-      char parent_id[20];
+      char parent_id[10];
       sprintf(parent_id, "%d", (int)(getppid()));
       execlp("ps", "ps", "-p", parent_id, "-lLf");
     } else {
