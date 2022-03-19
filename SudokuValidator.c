@@ -19,11 +19,10 @@ int check_row(int row) {
   if (row < 0 || 8 < row) { return -1; }
   int i, j;
   int checks[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+  printf("El hilo que revisa la fila es: %d\n", syscall(SYS_gettid));
 
-  #pragma omp parallel for
   for (i = 0; i < 9; i++) {
     // Verifica que este en el arreglo
-    #pragma omp parallel for
     for (j = 0; j < 9; j++) {
       // Encontro el numero
       if (sudoku_array[row][i] == checks[j]) {
@@ -43,10 +42,8 @@ int check_column(int column) {
   int i, j;
   int checks[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  #pragma omp parallel for
   for (i = 0; i < 9; i++) {
     // Verifica que este en el arreglo
-    #pragma omp parallel for
     for (j = 0; j < 9; j++) {
       // Encontro el numero
       if (sudoku_array[i][column] == checks[j]) {
@@ -66,17 +63,15 @@ int check_group(int row, int column) {
   int i, j;
   int checks[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  #pragma omp parallel for
   for (i = 0; i < 9; i++) {
     // Verifica que este en el arreglo
     int x = row + (i / 3);
     int y = column + (i % 3);
-    #pragma omp parallel for
     for (j = 0; j < 9; j++) {
       // Encontro el numero
       if (sudoku_array[x][y] == checks[j]) {
         checks[j] = -1;
-        break;
+        return -1;
       }
       // No encntro el numero
       if (j == 8) { return -1; }
@@ -89,11 +84,13 @@ void* check_all_columns(void *arg) {
   printf("El hilo que revisa las columnas es: %d\n", syscall(SYS_gettid));
   int i, check;
 
+  omp_set_num_threads(9);
+  omp_set_nested(1);
+  #pragma omp parallel for ordered
   for (i = 0; i < 8; i++) {
     check = check_column(i);
     if (check == -1) {
       columns = -1;
-      break;
     }
   }
   pthread_exit(0);
@@ -102,6 +99,7 @@ void* check_all_columns(void *arg) {
 int main(int argc, char** argv) {
   char* sudoku_path = argv[1];
   int i, readFile;
+  omp_set_num_threads(4);
   pthread_t thread;
 
   readFile = open(sudoku_path, O_RDONLY, 0666);\
@@ -132,23 +130,13 @@ int main(int argc, char** argv) {
     wait(NULL);
     int check;
 
-    #pragma omp parallel for
+    omp_set_num_threads(9);
+    omp_set_nested(1);
+    #pragma omp parallel for ordered schedule (dynamic)
     for (i = 0; i < 8; i++) { // Verifica las filas el padre
-      check = check_column(i);
+      check = check_row(i);
       if (check == -1) {
         rows = -1;
-        break;
-      }
-    }
-
-    // Revision del sudoku
-    #pragma omp parallel for
-    for (i = 0; i < 9; i++) {
-      int row = 3*(i/3);
-      int column = 3*(i%3);
-      int result = check_group(row, column);
-      if (result == -1) {
-        printf("numero invalido en la posicion (%d, %d)\n", row, column);
       }
     }
 
